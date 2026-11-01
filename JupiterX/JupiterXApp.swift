@@ -11,7 +11,7 @@ import SwiftUI
 struct JupiterXApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            TabHandler()
         }
     }
 }
