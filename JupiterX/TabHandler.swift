@@ -12,6 +12,8 @@ struct BrowserTab: Identifiable, Hashable {
     var title: String
     var urlString: String = "StartPage://"
     var htmlTitle: String? = nil
+    var faviconURL: URL? = nil
+
     init(id: UUID = UUID(), title: String, urlString: String = "StartPage://", htmlTitle: String? = nil) {
         self.id = id
         self.title = title
@@ -20,9 +22,18 @@ struct BrowserTab: Identifiable, Hashable {
     }
 }
 
+extension BrowserTab {
+    var displayTitle: String {
+        if let t = htmlTitle, !t.isEmpty { return t }
+        return urlString == "StartPage://" ? "New Tab" : urlString
+    }
+}
+
 struct TabHandler: View {
-    @State private var tabs: [BrowserTab] = [BrowserTab(title: "Start", urlString: "StartPage://")]
+    @State private var tabs: [BrowserTab] = [BrowserTab(title: "New Tab")]
     @State private var selectedTabID: BrowserTab.ID?
+    @State private var config = Config.load()
+    @State private var showSettings = false
 
     private var selectedTab: BrowserTab? {
         tabs.first(where: { $0.id == selectedTabID }) ?? tabs.first
@@ -35,7 +46,8 @@ struct TabHandler: View {
                     HStack(spacing: 8) {
                         ForEach(tabs) { tab in
                             TabChip(
-                                title: tab.title,
+                                title: tab.displayTitle,
+                                faviconURL: tab.urlString == "StartPage://" ? nil : tab.faviconURL,
                                 isActive: tab.id == selectedTab?.id,
                                 onClose: { close(tab) }
                             )
@@ -56,11 +68,15 @@ struct TabHandler: View {
 
                 Divider()
 
-                Group {
-                    if let current = selectedTab {
-                        content(for: current)
-                    } else {
-                        EmptyView()
+                // Keep every tab alive and only show the selected one,
+                // so switching tabs doesn't reload pages.
+                ZStack {
+                    ForEach(tabs) { tab in
+                        let isSelected = tab.id == selectedTab?.id
+                        content(for: tab)
+                            .opacity(isSelected ? 1 : 0)
+                            .allowsHitTesting(isSelected)
+                            .accessibilityHidden(!isSelected)
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -68,7 +84,11 @@ struct TabHandler: View {
             .navigationTitle(currentTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Settings", systemImage: "gearshape") { showSettings = true }
+                }
             }
+            .sheet(isPresented: $showSettings) { ConfigView(config: $config) }
             .onAppear {
                 if selectedTabID == nil {
                     selectedTabID = tabs.first?.id
@@ -78,9 +98,9 @@ struct TabHandler: View {
     }
 
     /// Navigation title logic:
-    /// If the selected tab's urlString is "StartPage://" (StartPage) or htmlTitle is "New Tab",
+    /// If the selected tab is on the start page or its title is "New Tab",
     /// return an empty string to avoid showing placeholder titles.
-    /// Otherwise, prefer the htmlTitle if available, then fallback to the urlString.
+    /// Otherwise, prefer the htmlTitle if available, then fall back to the urlString.
     private var currentTitle: String {
         guard let tab = selectedTab else { return "" }
         if tab.urlString == "StartPage://" || tab.htmlTitle == "New Tab" {
@@ -91,23 +111,19 @@ struct TabHandler: View {
 
     @ViewBuilder
     private func content(for tab: BrowserTab) -> some View {
-        // Using if-let instead of guard to avoid early return which is disallowed in @ViewBuilder
-        // This fixes SwiftUI's opaque return type requirement by ensuring all code paths return a View
         if let idx = tabs.firstIndex(where: { $0.id == tab.id }) {
-            if tab.title == "Start" {
-                StartPage { newTitle in
-                    tabs[idx].title = newTitle
-                }
-            } else {
-                ContentView(urlString: $tabs[idx].urlString, htmlTitle: $tabs[idx].htmlTitle)
-            }
-        } else {
-            EmptyView()
+            ContentView(
+                urlString: $tabs[idx].urlString,
+                htmlTitle: $tabs[idx].htmlTitle,
+                faviconURL: $tabs[idx].faviconURL,
+                config: config
+            )
+            .id(tab.id) // separate state per tab
         }
     }
 
     private func addTab() {
-        let new = BrowserTab(title: "New Tab", urlString: "StartPage://")
+        let new = BrowserTab(title: "New Tab")
         tabs.append(new)
         selectedTabID = new.id
     }
@@ -118,7 +134,7 @@ struct TabHandler: View {
         tabs.remove(at: idx)
 
         if tabs.isEmpty {
-            let start = BrowserTab(title: "Start", urlString: "StartPage://")
+            let start = BrowserTab(title: "New Tab")
             tabs = [start]
             selectedTabID = start.id
         } else if closingIsSelected {
@@ -130,14 +146,28 @@ struct TabHandler: View {
 
 private struct TabChip: View {
     let title: String
+    let faviconURL: URL?
     let isActive: Bool
     let onClose: () -> Void
 
     var body: some View {
         HStack(spacing: 6) {
-            Image(systemName: isActive ? "circle.fill" : "circle")
-                .font(.system(size: 8))
-                .foregroundStyle(isActive ? Color.accentColor : Color.secondary)
+            Group {
+                if let faviconURL {
+                    AsyncImage(url: faviconURL) { phase in
+                        if let image = phase.image {
+                            image.resizable().scaledToFit()
+                        } else {
+                            Image(systemName: "globe").foregroundStyle(.secondary)
+                        }
+                    }
+                } else {
+                    Image(systemName: "globe").foregroundStyle(.secondary)
+                }
+            }
+            .frame(width: 14, height: 14)
+            .clipShape(RoundedRectangle(cornerRadius: 3))
+
             Text(title)
                 .lineLimit(1)
                 .font(.subheadline)
@@ -166,4 +196,3 @@ private struct TabChip: View {
 #Preview {
     TabHandler()
 }
-

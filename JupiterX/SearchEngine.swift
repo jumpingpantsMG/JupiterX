@@ -11,7 +11,9 @@ import SwiftUI
 struct SearchEngine {
 
     static func url(prompt: String, engine: String) -> URL {
-        let query = prompt.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+        var allowed = CharacterSet.urlQueryAllowed
+        allowed.remove(charactersIn: "&+=#")
+        let query = prompt.addingPercentEncoding(withAllowedCharacters: allowed) ?? ""
 
         switch engine {
         case "Bing":
@@ -19,14 +21,13 @@ struct SearchEngine {
         case "DuckDuckGo":
             return URL(string: "https://duckduckgo.com/?q=" + query)!
         case "Yahoo":
-            return URL(string: "https://yahoo.com/?p=" + query)!
+            return URL(string: "https://search.yahoo.com/search?p=" + query)!
         case "Ecosia":
             return URL(string: "https://www.ecosia.org/search?method=index&q=" + query)!
         default:
             return URL(string: "https://www.google.com/search?q=" + query)!
         }
-    }
-}
+    }}
 
 #Preview("SearchEngine URL Preview") {
     let url = SearchEngine.url(prompt: "hi", engine: "Ecosia")

@@ -41,8 +41,8 @@ struct ConnectionIsSafe {
 
         // 2️⃣ Advanced Data Protection - blacklist / whitelist
         if advancedDataProtection {
-            let unsafeDomains = Config().websiteBlacklist
-            if unsafeDomains.contains(host) {
+            let unsafeDomains = Config.load().websiteBlacklist.map { $0.lowercased() }
+            if unsafeDomains.contains(where: { host == $0 || host.hasSuffix("." + $0) }) {
                 maxUnsafeness = max(maxUnsafeness, 3)
                 return (false, maxUnsafeness)
             }

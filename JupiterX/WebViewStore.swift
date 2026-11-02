@@ -20,6 +20,8 @@ final class WebViewStore: ObservableObject {
     @Published var canGoBack: Bool = false
     @Published var canGoForward: Bool = false
     @Published var progress: Double = 1.0
+    @Published var isScrolled = false
+    private var scrollObservation: NSKeyValueObservation?
 
     private var progressObservation: NSKeyValueObservation?
     private func observeWebViewProgress() {
@@ -27,6 +29,9 @@ final class WebViewStore: ObservableObject {
             DispatchQueue.main.async {
                 self?.progress = change.newValue ?? webView.estimatedProgress
             }
+        }
+        scrollObservation = webView?.scrollView.observe(\.contentOffset, options: [.new]) { [weak self] sv, _ in
+            DispatchQueue.main.async { self?.isScrolled = sv.contentOffset.y > 0 }
         }
     }
 
